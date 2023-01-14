@@ -2,48 +2,69 @@ import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/commo
 import { CreateEventDto } from "./create-event.dto";
 import { UpdateEventDto } from "./update-event.dto";
 import { EventEntity } from "./event.entity";
+import { Like, MoreThan, Repository } from "typeorm";
+import { InjectRepository } from "@nestjs/typeorm";
 
 
 @Controller('events')
 export class EventsController {
 
-  private events: EventEntity[] = []
+  constructor(@InjectRepository(EventEntity) private readonly repository: Repository<EventEntity>) {}
+
+
 
   @Get()
-  findAll(){
-    return this.events
+ async findAll(){
+    return await this.repository.find()
+  }
+  @Get('practice')
+  async practice(){
+    return await this.repository.find({select: ['id', 'when'],where: [{
+        id: MoreThan(2),
+        when: MoreThan(new Date('2021-02-12T13:00:00'))
+      }, {
+      description: Like('%meet%')
+      }],
+      take: 2,
+      order: {
+       id: 'DESC'
+      }
+    })
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string){
-    const event = this.events.find((e)=> e.id === parseInt(id))
+  async findOne(@Param('id') id: string){
+    const event = await this.repository.findOne({where: {id: parseInt(id)}})
     return event
   }
 
 
+
+
   @Post()
-  create(@Body() input: CreateEventDto){
-     const event = {
+  async create(@Body() input: CreateEventDto){
+    return  await this.repository.save({
        ...input,
-       when: new Date(input.when),
-       id: this.events.length + 1
-     }
-     this.events.push(event)
+       when: new Date(input.when)
+     })
+
+
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() input: UpdateEventDto){
-   const index = this.events.findIndex((event)=> event.id === +id)
-   this.events[index] = {
-      ...this.events[index],
+ async update(@Param('id') id: string, @Body() input: UpdateEventDto){
+   const event = await this.repository.findOne({where: {id: parseInt(id)}})
+  return await this.repository.save({
+      ...event,
       ...input,
-      when: input.when? new Date(input.when): this.events[index].when
-    }
-    return this.events[index]
+      when: input.when? new Date(input.when):event.when
+    })
+
   }
 
   @Delete(':id')
-  remove(@Param('id') id:string){
-     this.events.filter((event)=>event.id !== +id)
+  async remove(@Param('id') id:string){
+    const event = await this.repository.findOne({where: {id: parseInt(id)}})
+    await this.repository.remove(event)
   }
 }
